@@ -18,7 +18,11 @@
       "Bash(git --version:*)",
       "Bash(git rev-parse:*)",
       "Bash(git add:*)",
-      "Bash(del nul)"
+      "Bash(del nul)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(file-watcher\\): implement Local File Watcher Service\n\nBronze Tier - Milestone 1: Perception Layer Complete\n\nThis commit implements the complete Local File Watcher Service, which monitors\na designated drop folder for new files and creates corresponding action items\nin the Obsidian vault''s /Needs_Action folder.\n\nFeatures implemented:\n- File detection using watchdog library for cross-platform support\n- YAML frontmatter generation with file metadata \\(type, name, size, timestamp\\)\n- Structured JSON logging to stdout/stderr per constitution requirements\n- Graceful shutdown with SIGINT/SIGTERM signal handling\n- Error resilience - service continues after individual file processing errors\n- Dry-run mode for testing without creating files\n- CLI with --vault, --drop-folder, --dry-run, --version, --help flags\n\nTest coverage:\n- 68 tests \\(unit + integration\\)\n- All acceptance scenarios from spec verified\n- Special character handling \\(unicode, spaces, brackets\\)\n- Duplicate filename handling with timestamp suffix\n\nDocumentation:\n- Complete specification \\(spec.md\\)\n- Implementation plan \\(plan.md\\)\n- Data model \\(data-model.md\\)\n- CLI contract \\(cli-interface.md\\)\n- Quickstart guide \\(quickstart.md\\)\n- 40 tasks across 6 phases \\(all complete\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git tag:*)",
+      "Bash(gh auth status)",
+      "Bash(dir:*)"
     ]
   }
 }
