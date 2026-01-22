@@ -29,6 +29,7 @@ env/
 # IDE
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *.swo
 *~
@@ -54,3 +55,6 @@ Thumbs.db
 
 # Project specific
 *.tmp
+
+# Claude Code local settings
+.claude/settings.local.json
