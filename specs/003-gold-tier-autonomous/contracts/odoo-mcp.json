@@ -1,0 +1,468 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Odoo MCP Server Contract",
+  "description": "MCP tool definitions for Odoo Community ERP integration via JSON-RPC API",
+  "version": "1.0.0",
+  "server": {
+    "name": "odoo-mcp",
+    "description": "Odoo Community ERP integration for accounting operations",
+    "transport": "stdio",
+    "command": "node",
+    "args": ["src/mcp_servers/odoo/index.js"]
+  },
+  "tools": [
+    {
+      "name": "create_invoice",
+      "description": "Create a draft customer invoice in Odoo. Requires approval before posting. All invoices are created in 'draft' state per HITL safety requirements.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "customer_name": {
+            "type": "string",
+            "description": "Customer name (will resolve to partner_id) or numeric Odoo partner ID"
+          },
+          "invoice_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Invoice date in YYYY-MM-DD format"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Payment due date in YYYY-MM-DD format (optional, defaults to invoice_date + payment terms)"
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string",
+                  "description": "Line item description"
+                },
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Quantity (must be positive)"
+                },
+                "unit_price": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Price per unit"
+                },
+                "tax_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "description": "Optional array of Odoo tax IDs to apply"
+                }
+              },
+              "required": ["description", "quantity", "unit_price"]
+            },
+            "description": "Invoice line items"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional invoice notes or memo"
+          },
+          "currency": {
+            "type": "string",
+            "default": "USD",
+            "description": "Currency code (ISO 4217)"
+          }
+        },
+        "required": ["customer_name", "invoice_date", "lines"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "description": "Odoo account.move ID"
+          },
+          "invoice_number": {
+            "type": "string",
+            "description": "Odoo invoice number (e.g., 'INV/2026/00001')"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["draft"],
+            "description": "Always 'draft' - requires approval to post"
+          },
+          "amount_untaxed": {
+            "type": "number",
+            "description": "Subtotal before tax"
+          },
+          "amount_tax": {
+            "type": "number",
+            "description": "Total tax"
+          },
+          "amount_total": {
+            "type": "number",
+            "description": "Total invoice amount"
+          },
+          "approval_file": {
+            "type": "string",
+            "description": "Path to approval request file in vault"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if success is false"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "create_payment",
+      "description": "Create a draft payment entry in Odoo. Requires approval before posting. Supports both inbound (customer) and outbound (vendor) payments.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "partner_name": {
+            "type": "string",
+            "description": "Partner name (will resolve to partner_id) or numeric Odoo partner ID"
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0.01,
+            "description": "Payment amount (must be positive)"
+          },
+          "payment_type": {
+            "type": "string",
+            "enum": ["inbound", "outbound"],
+            "description": "inbound = customer payment received, outbound = payment to vendor"
+          },
+          "payment_method": {
+            "type": "string",
+            "enum": ["manual", "check", "bank_transfer", "credit_card"],
+            "default": "manual",
+            "description": "Payment method"
+          },
+          "payment_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Payment date in YYYY-MM-DD format (defaults to today)"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Payment reference (e.g., invoice number, check number)"
+          },
+          "journal_id": {
+            "type": "integer",
+            "description": "Odoo journal ID for bank/cash account (optional, uses default if not specified)"
+          },
+          "currency": {
+            "type": "string",
+            "default": "USD",
+            "description": "Currency code (ISO 4217)"
+          }
+        },
+        "required": ["partner_name", "amount", "payment_type"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "payment_id": {
+            "type": "integer",
+            "description": "Odoo account.payment ID"
+          },
+          "payment_name": {
+            "type": "string",
+            "description": "Odoo payment reference"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["draft"],
+            "description": "Always 'draft' - requires approval to post"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "approval_file": {
+            "type": "string",
+            "description": "Path to approval request file in vault"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if success is false"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "get_financial_summary",
+      "description": "Retrieve financial summary from Odoo for CEO briefing. Queries posted invoices and payments within the specified date range.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "description": "Start date for summary period (YYYY-MM-DD)"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "description": "End date for summary period (YYYY-MM-DD)"
+          },
+          "include_drafts": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include draft invoices in summary"
+          },
+          "top_customers_limit": {
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Number of top customers to return"
+          }
+        },
+        "required": ["date_from", "date_to"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "period": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date"
+              },
+              "to": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          },
+          "revenue": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "description": "Total revenue from posted invoices"
+              },
+              "paid": {
+                "type": "number",
+                "description": "Amount already collected"
+              },
+              "receivable": {
+                "type": "number",
+                "description": "Outstanding receivables"
+              }
+            }
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "invoices_posted": {
+                "type": "integer"
+              },
+              "invoices_draft": {
+                "type": "integer"
+              },
+              "payments_received": {
+                "type": "integer"
+              }
+            }
+          },
+          "top_customers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "partner_id": {
+                  "type": "integer"
+                },
+                "revenue": {
+                  "type": "number"
+                },
+                "invoice_count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency of amounts"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if success is false"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "post_invoice",
+      "description": "Post a draft invoice in Odoo (changes state from draft to posted). Requires prior approval. This action is irreversible.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "invoice_id": {
+            "type": "integer",
+            "description": "Odoo account.move ID to post"
+          },
+          "approval_token": {
+            "type": "string",
+            "description": "Approval token from vault approval file"
+          }
+        },
+        "required": ["invoice_id", "approval_token"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "invoice_id": {
+            "type": "integer"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["posted"]
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "post_payment",
+      "description": "Post a draft payment in Odoo (changes state from draft to posted). Requires prior approval. This action is irreversible.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "payment_id": {
+            "type": "integer",
+            "description": "Odoo account.payment ID to post"
+          },
+          "approval_token": {
+            "type": "string",
+            "description": "Approval token from vault approval file"
+          }
+        },
+        "required": ["payment_id", "approval_token"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "payment_id": {
+            "type": "integer"
+          },
+          "payment_name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": ["posted"]
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "test_connection",
+      "description": "Test the Odoo connection and verify credentials. Use before other operations to ensure connectivity.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "odoo_version": {
+            "type": "string",
+            "description": "Odoo server version"
+          },
+          "database": {
+            "type": "string",
+            "description": "Connected database name"
+          },
+          "user": {
+            "type": "string",
+            "description": "Authenticated username"
+          },
+          "company": {
+            "type": "string",
+            "description": "Company name"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "description": "Connection latency in milliseconds"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    }
+  ],
+  "errorCodes": {
+    "ODOO_CONNECTION_FAILED": "Unable to connect to Odoo server",
+    "ODOO_AUTH_FAILED": "Authentication failed - check credentials",
+    "ODOO_TIMEOUT": "Connection timed out (30 seconds)",
+    "ODOO_VALIDATION_ERROR": "Data validation failed in Odoo",
+    "ODOO_PERMISSION_DENIED": "User lacks permission for this operation",
+    "APPROVAL_REQUIRED": "Action requires approval - check approval_file",
+    "APPROVAL_INVALID": "Invalid or expired approval token",
+    "PARTNER_NOT_FOUND": "Customer/partner not found in Odoo",
+    "INVOICE_NOT_FOUND": "Invoice not found",
+    "PAYMENT_NOT_FOUND": "Payment not found"
+  },
+  "configuration": {
+    "connection": {
+      "host": "env:ODOO_HOST",
+      "port": "env:ODOO_PORT",
+      "database": "env:ODOO_DATABASE",
+      "username": "env:ODOO_USERNAME",
+      "api_key": "credential:odoo_api_key"
+    },
+    "timeouts": {
+      "connection_ms": 30000,
+      "request_ms": 60000
+    },
+    "retry": {
+      "max_attempts": 3,
+      "initial_delay_ms": 1000,
+      "max_delay_ms": 10000,
+      "backoff_multiplier": 2
+    }
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gmail MCP Server Contract",
+  "description": "Model Context Protocol tool definitions for Gmail operations in AI Employee Silver Tier",
+  "version": "1.0.0",
+  "server": {
+    "name": "gmail-mcp-server",
+    "version": "1.0.0",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["tsx", "src/mcp_servers/gmail/src/index.ts"]
+  },
+  "tools": [
+    {
+      "name": "send_email",
+      "description": "Send an email via Gmail API. Requires prior approval through the approval workflow. Rate limited to 50 emails per day. Duplicate emails are automatically detected and blocked.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "format": "email",
+            "description": "Recipient email address"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 998,
+            "description": "Email subject line (max 998 characters per RFC 2822)"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Email body content (plain text or HTML)"
+          },
+          "cc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "description": "CC recipients (optional)"
+          },
+          "bcc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "description": "BCC recipients (optional)"
+          },
+          "html": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, body is treated as HTML content"
+          },
+          "reply_to_message_id": {
+            "type": "string",
+            "description": "RFC 2822 Message-ID to reply to (for email threading)"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, simulate send without actually sending (for testing)"
+          }
+        },
+        "required": ["to", "subject", "body"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the email was sent successfully"
+          },
+          "message_id": {
+            "type": "string",
+            "description": "Gmail message ID (only on success)"
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "Gmail thread ID (only on success)"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message (only on failure)"
+          },
+          "rate_limit": {
+            "type": "object",
+            "properties": {
+              "remaining": {
+                "type": "integer",
+                "description": "Number of emails remaining today"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Daily email limit"
+              }
+            },
+            "description": "Rate limit status"
+          }
+        },
+        "required": ["success"]
+      }
+    }
+  ],
+  "securityRequirements": {
+    "authentication": {
+      "type": "oauth2",
+      "provider": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/gmail.send",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.modify"
+      ],
+      "credentialStorage": ["os-keyring", "encrypted-file"]
+    },
+    "approvalRequired": true,
+    "approvalWorkflow": {
+      "description": "All email sends must be approved via the Human-in-the-Loop approval workflow",
+      "approvalFolder": "/Pending_Approval",
+      "approvedFolder": "/Approved",
+      "rejectedFolder": "/Rejected",
+      "integrityValidation": "sha256"
+    }
+  },
+  "rateLimits": {
+    "send_email": {
+      "limit": 50,
+      "window": "24h",
+      "scope": "per-account"
+    }
+  },
+  "idempotency": {
+    "enabled": true,
+    "keyComponents": ["to", "subject", "body", "timestamp_minute"],
+    "windowHours": 168
+  },
+  "errorCodes": {
+    "RATE_LIMIT_EXCEEDED": {
+      "description": "Daily email limit reached",
+      "retryable": false,
+      "httpEquivalent": 429
+    },
+    "DUPLICATE_EMAIL": {
+      "description": "Email already sent within idempotency window",
+      "retryable": false,
+      "httpEquivalent": 409
+    },
+    "CREDENTIALS_NOT_FOUND": {
+      "description": "Gmail OAuth credentials not configured",
+      "retryable": false,
+      "httpEquivalent": 401
+    },
+    "TOKEN_EXPIRED": {
+      "description": "OAuth token expired and refresh failed",
+      "retryable": true,
+      "httpEquivalent": 401
+    },
+    "GMAIL_API_ERROR": {
+      "description": "Gmail API returned an error",
+      "retryable": true,
+      "httpEquivalent": 502
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://claude.ai/schemas/plugin-manifest-v1.json",
+  "name": "ralph-wiggum",
+  "displayName": "Ralph Wiggum Autonomous Loop",
+  "version": "1.0.0",
+  "description": "Gold Tier autonomous agent loop with hybrid completion detection. Enables Claude to work autonomously on tasks while maintaining human oversight through approval checkpoints.",
+  "author": "AI Employee Hackathon",
+  "license": "MIT",
+  "keywords": [
+    "autonomous",
+    "agent",
+    "loop",
+    "gold-tier",
+    "completion-detection"
+  ],
+  "capabilities": {
+    "autonomous_loop": true,
+    "hybrid_completion_detection": true,
+    "approval_checkpoints": true,
+    "iteration_limits": true,
+    "error_state_detection": true
+  },
+  "requirements": {
+    "claude_code_version": ">=1.0.0",
+    "shell": "bash",
+    "tools": [
+      "jq"
+    ]
+  },
+  "configuration": {
+    "max_iterations": {
+      "type": "integer",
+      "default": 50,
+      "description": "Maximum autonomous iterations before requiring human intervention",
+      "env": "RALPH_WIGGUM_MAX_ITERATIONS"
+    },
+    "approval_dir": {
+      "type": "string",
+      "default": "data/approvals",
+      "description": "Directory for approval request files",
+      "env": "APPROVAL_DIR"
+    },
+    "log_file": {
+      "type": "string",
+      "default": "logs/ralph-wiggum-stop.log",
+      "description": "Log file for stop hook execution"
+    },
+    "semantic_detection": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable semantic completion phrase detection"
+    },
+    "task_detection": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable task-based completion detection from tasks.md"
+    },
+    "approval_detection": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable approval request detection and file creation"
+    },
+    "error_detection": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable error state detection for unrecoverable errors"
+    }
+  },
+  "hooks": {
+    "stop": {
+      "script": "hooks/ralph-wiggum-stop.sh",
+      "description": "Hybrid completion detection hook",
+      "triggers": [
+        "post_action",
+        "post_response"
+      ]
+    }
+  },
+  "integrations": {
+    "error_categorizer": {
+      "module": "src.common.error_categorizer",
+      "description": "Error classification for recovery strategies"
+    },
+    "retry_handler": {
+      "module": "src.common.retry_handler",
+      "description": "Exponential backoff retry logic"
+    },
+    "action_queue": {
+      "module": "src.orchestrator.action_queue",
+      "description": "Graceful degradation queue for failed actions"
+    },
+    "audit_logger": {
+      "module": "src.common.audit_logger",
+      "description": "Audit logging for compliance"
+    }
+  },
+  "documentation": {
+    "readme": "README.md",
+    "spec": "specs/003-gold-tier-autonomous/spec.md"
+  },
+  "telemetry": {
+    "enabled": false,
+    "events": [
+      "loop_start",
+      "loop_stop",
+      "approval_created",
+      "iteration_count"
+    ]
+  }
+}

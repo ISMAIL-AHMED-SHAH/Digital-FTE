@@ -1,0 +1,129 @@
+# AI Employee Watcher Configuration
+# Silver Tier: External Connectivity Settings
+
+# =============================================================================
+# Global Settings
+# =============================================================================
+global:
+  # Total memory budget for all watchers (MB)
+  total_memory_budget_mb: 500
+  # Alert threshold (percentage of budget)
+  memory_alert_threshold_percent: 80
+  # Recovery threshold (percentage of budget)
+  memory_recovery_threshold_percent: 70
+  # Resource monitor check interval (seconds)
+  resource_check_interval_seconds: 60
+  # Idempotency record retention (days)
+  idempotency_retention_days: 7
+  # Approval request expiration (hours)
+  approval_expiration_hours: 24
+
+# =============================================================================
+# Gmail Watcher (Priority: 1 - Highest)
+# =============================================================================
+gmail:
+  enabled: true
+  priority: 1
+  memory_limit_mb: 100
+  # Poll interval in seconds (2 minutes)
+  poll_interval_seconds: 120
+  # Keywords to filter important emails (case-insensitive)
+  keywords:
+    - urgent
+    - important
+    - invoice
+    - payment
+    - deadline
+    - action required
+    - asap
+    - critical
+  # Gmail labels to monitor (in addition to IMPORTANT)
+  labels:
+    - INBOX
+    - IMPORTANT
+  # Maximum emails to process per poll
+  max_emails_per_poll: 10
+  # Rate limit: max emails to send per day
+  send_rate_limit_per_day: 50
+
+# =============================================================================
+# WhatsApp Watcher (Priority: 2 - Medium)
+# =============================================================================
+whatsapp:
+  enabled: true
+  priority: 2
+  memory_limit_mb: 100
+  # Keywords to filter business messages (case-insensitive)
+  keywords:
+    - invoice
+    - pricing
+    - quote
+    - order
+    - support
+    - help
+    - urgent
+    - payment
+  # Rate limit: max webhook requests per minute per IP
+  webhook_rate_limit_per_minute: 100
+  # Response timeout (milliseconds) - must acknowledge within 500ms
+  webhook_response_timeout_ms: 500
+
+# =============================================================================
+# LinkedIn Watcher/MCP (Priority: 3 - Lowest)
+# =============================================================================
+linkedin:
+  enabled: true
+  priority: 3
+  memory_limit_mb: 100
+  # Rate limit: max posts per day
+  post_rate_limit_per_day: 10
+  # Maximum post content length (characters)
+  max_post_length: 3000
+  # Default visibility for posts
+  default_visibility: PUBLIC  # PUBLIC or CONNECTIONS
+
+# =============================================================================
+# Approval Watcher
+# =============================================================================
+approval:
+  enabled: true
+  priority: 1  # Same priority as Gmail (critical path)
+  memory_limit_mb: 50
+  # How often to check for expired approvals (seconds)
+  expiration_check_interval_seconds: 300
+  # Folder names within vault
+  folders:
+    needs_action: Needs_Action
+    pending_approval: Pending_Approval
+    approved: Approved
+    rejected: Rejected
+    expired: Expired
+    done: Done
+    logs: Logs
+    alerts: Alerts
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  # Log format: json or text
+  format: json
+  # Log retention days
+  retention_days: 90
+  # Include stack traces in error logs
+  include_traceback: true
+
+# =============================================================================
+# Retry Configuration
+# =============================================================================
+retry:
+  # Initial delay before first retry (seconds)
+  initial_delay_seconds: 1
+  # Maximum delay between retries (seconds)
+  max_delay_seconds: 60
+  # Maximum number of retry attempts
+  max_retries: 5
+  # Backoff multiplier
+  backoff_multiplier: 2

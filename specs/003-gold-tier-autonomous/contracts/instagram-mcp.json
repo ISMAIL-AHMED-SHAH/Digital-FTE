@@ -1,0 +1,351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Instagram MCP Server Contract",
+  "description": "MCP tool definitions for Instagram Business posting via Meta Business Suite API (Graph API v22+)",
+  "version": "1.0.0",
+  "server": {
+    "name": "instagram-mcp",
+    "description": "Instagram Business account posting with two-step container workflow",
+    "transport": "stdio",
+    "command": "node",
+    "args": ["src/mcp_servers/instagram/index.js"]
+  },
+  "tools": [
+    {
+      "name": "publish_media",
+      "description": "Publish an image, video, or carousel to Instagram Business account. Uses two-step container workflow: create container, wait for processing, then publish. Requires approval before final publish.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ig_user_id": {
+            "type": "string",
+            "description": "Instagram Business account ID"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": ["IMAGE", "VIDEO", "CAROUSEL", "REELS"],
+            "description": "Type of media to publish"
+          },
+          "media_urls": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "URLs to media files (must be publicly accessible HTTPS URLs). For CAROUSEL, provide 2-10 images."
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 2200,
+            "description": "Post caption (max 2,200 characters)"
+          },
+          "location_id": {
+            "type": "string",
+            "description": "Optional Facebook Place ID for location tagging"
+          },
+          "user_tags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "username": {
+                  "type": "string"
+                },
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": ["username", "x", "y"]
+            },
+            "description": "Optional user tags with coordinates (0-1 range)"
+          },
+          "cover_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Cover image URL for VIDEO/REELS"
+          },
+          "share_to_feed": {
+            "type": "boolean",
+            "default": true,
+            "description": "For REELS, whether to also share to feed"
+          }
+        },
+        "required": ["ig_user_id", "media_type", "media_urls", "caption"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "container_id": {
+            "type": "string",
+            "description": "Container ID during processing"
+          },
+          "media_id": {
+            "type": "string",
+            "description": "Published media ID (after publish)"
+          },
+          "permalink": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to published post"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending_approval", "processing", "published", "failed"],
+            "description": "Publishing status"
+          },
+          "container_status": {
+            "type": "string",
+            "enum": ["IN_PROGRESS", "FINISHED", "ERROR"],
+            "description": "Container processing status"
+          },
+          "approval_file": {
+            "type": "string",
+            "description": "Path to approval request file (if pending)"
+          },
+          "error": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        },
+        "required": ["success", "status"]
+      }
+    },
+    {
+      "name": "check_container_status",
+      "description": "Check the processing status of a media container. Instagram requires containers to finish processing before publishing.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "container_id": {
+            "type": "string",
+            "description": "Container ID from publish_media"
+          }
+        },
+        "required": ["container_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "container_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["IN_PROGRESS", "FINISHED", "ERROR", "EXPIRED"]
+          },
+          "status_code": {
+            "type": "string",
+            "description": "Detailed status code if ERROR"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "get_account_info",
+      "description": "Get information about an Instagram Business account",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ig_user_id": {
+            "type": "string",
+            "description": "Instagram Business account ID"
+          }
+        },
+        "required": ["ig_user_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "account": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "username": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "followers_count": {
+                "type": "integer"
+              },
+              "follows_count": {
+                "type": "integer"
+              },
+              "media_count": {
+                "type": "integer"
+              },
+              "profile_picture_url": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          },
+          "quota": {
+            "type": "object",
+            "properties": {
+              "posts_today": {
+                "type": "integer"
+              },
+              "posts_remaining": {
+                "type": "integer"
+              },
+              "daily_limit": {
+                "type": "integer",
+                "default": 50
+              }
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "get_media_insights",
+      "description": "Get engagement metrics for a published Instagram post",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "media_id": {
+            "type": "string",
+            "description": "Instagram media ID"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["impressions", "reach", "engagement", "saved", "video_views", "likes", "comments", "shares"]
+            },
+            "default": ["impressions", "reach", "engagement"],
+            "description": "Metrics to retrieve"
+          }
+        },
+        "required": ["media_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "media_id": {
+            "type": "string"
+          },
+          "insights": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "refresh_token",
+      "description": "Refresh the Instagram access token before expiry. Called proactively when <1 hour remaining.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ig_user_id": {
+            "type": "string",
+            "description": "Instagram Business account ID"
+          }
+        },
+        "required": ["ig_user_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    }
+  ],
+  "errorCodes": {
+    "IG_AUTH_FAILED": "Authentication failed - token expired or invalid",
+    "IG_TOKEN_EXPIRED": "Access token has expired - refresh required",
+    "IG_PERMISSION_DENIED": "Missing required permission (instagram_content_publishing)",
+    "IG_RATE_LIMITED": "Rate limit exceeded (50 posts/day limit)",
+    "IG_ACCOUNT_NOT_FOUND": "Instagram Business account not found",
+    "IG_MEDIA_ERROR": "Failed to process media - check URL accessibility and format",
+    "IG_CONTAINER_ERROR": "Container processing failed",
+    "IG_CONTAINER_EXPIRED": "Container expired before publishing (24 hour limit)",
+    "IG_CONTENT_POLICY": "Content violates Instagram community guidelines",
+    "IG_ASPECT_RATIO": "Media aspect ratio not supported (must be 4:5 to 1.91:1)",
+    "APPROVAL_REQUIRED": "Action requires approval",
+    "APPROVAL_INVALID": "Invalid or expired approval token"
+  },
+  "configuration": {
+    "oauth": {
+      "app_id": "env:META_APP_ID",
+      "app_secret": "credential:meta_app_secret",
+      "access_token": "credential:ig_access_token_{ig_user_id}"
+    },
+    "api": {
+      "base_url": "https://graph.instagram.com/v22.0",
+      "timeout_ms": 60000,
+      "container_poll_interval_ms": 5000,
+      "container_max_wait_ms": 300000
+    },
+    "rate_limits": {
+      "posts_per_day": 3,
+      "api_calls_per_hour": 200
+    },
+    "media_requirements": {
+      "image_formats": ["JPEG", "PNG"],
+      "video_formats": ["MP4", "MOV"],
+      "max_image_size_mb": 8,
+      "max_video_size_mb": 100,
+      "max_video_duration_seconds": 60,
+      "aspect_ratio_min": 0.8,
+      "aspect_ratio_max": 1.91
+    },
+    "token_refresh": {
+      "threshold_minutes": 60,
+      "proactive": true
+    }
+  }
+}

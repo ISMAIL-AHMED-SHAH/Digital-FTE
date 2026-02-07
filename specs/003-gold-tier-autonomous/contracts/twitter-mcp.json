@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Twitter MCP Server Contract",
+  "description": "MCP tool definitions for Twitter/X posting via Twitter API v2 with OAuth 1.0a authentication",
+  "version": "1.0.0",
+  "server": {
+    "name": "twitter-mcp",
+    "description": "Twitter/X posting and engagement via API v2",
+    "transport": "stdio",
+    "command": "node",
+    "args": ["src/mcp_servers/twitter/index.js"]
+  },
+  "tools": [
+    {
+      "name": "post_tweet",
+      "description": "Post a tweet to Twitter/X. Requires approval before posting. Supports text, threads, quotes, and media attachments.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 280,
+            "description": "Tweet text (max 280 characters). URLs count as 23 characters."
+          },
+          "reply_to_tweet_id": {
+            "type": "string",
+            "description": "Tweet ID to reply to (for threads or replies)"
+          },
+          "quote_tweet_id": {
+            "type": "string",
+            "description": "Tweet ID to quote"
+          },
+          "media_ids": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "type": "string"
+            },
+            "description": "Media IDs from upload_media (max 4 images or 1 video)"
+          },
+          "poll": {
+            "type": "object",
+            "properties": {
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 4,
+                "items": {
+                  "type": "string",
+                  "maxLength": 25
+                }
+              },
+              "duration_minutes": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 10080,
+                "default": 1440
+              }
+            },
+            "required": ["options"],
+            "description": "Optional poll attachment"
+          },
+          "reply_settings": {
+            "type": "string",
+            "enum": ["everyone", "mentionedUsers", "following"],
+            "default": "everyone",
+            "description": "Who can reply to this tweet"
+          }
+        },
+        "required": ["text"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "tweet_id": {
+            "type": "string",
+            "description": "Posted tweet ID"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the tweet"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending_approval", "posted", "failed"],
+            "description": "Post status"
+          },
+          "text": {
+            "type": "string",
+            "description": "Actual posted text"
+          },
+          "approval_file": {
+            "type": "string",
+            "description": "Path to approval request file (if pending)"
+          },
+          "error": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        },
+        "required": ["success", "status"]
+      }
+    },
+    {
+      "name": "upload_media",
+      "description": "Upload media for attachment to tweets. Uses Twitter API v1.1 media upload endpoint. Returns media_id for use in post_tweet.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "media_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to media file (must be publicly accessible)"
+          },
+          "media_type": {
+            "type": "string",
+            "enum": ["image", "gif", "video"],
+            "description": "Type of media"
+          },
+          "alt_text": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Alt text for accessibility"
+          }
+        },
+        "required": ["media_url", "media_type"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "media_id": {
+            "type": "string",
+            "description": "Media ID for use in post_tweet"
+          },
+          "media_key": {
+            "type": "string"
+          },
+          "expires_after_secs": {
+            "type": "integer",
+            "description": "Seconds until media expires (must post within this time)"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "post_thread",
+      "description": "Post a thread (series of connected tweets). Requires approval. Automatically chains tweets using reply_to_tweet_id.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tweets": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "maxLength": 280
+                },
+                "media_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["text"]
+            },
+            "description": "Array of tweets to post as thread (2-25 tweets)"
+          }
+        },
+        "required": ["tweets"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "thread": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tweet_id": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending_approval", "posted", "partial", "failed"]
+          },
+          "first_tweet_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "approval_file": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success", "status"]
+      }
+    },
+    {
+      "name": "delete_tweet",
+      "description": "Delete a tweet. Requires approval.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tweet_id": {
+            "type": "string",
+            "description": "Tweet ID to delete"
+          },
+          "approval_token": {
+            "type": "string",
+            "description": "Approval token from vault"
+          }
+        },
+        "required": ["tweet_id", "approval_token"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "get_tweet_metrics",
+      "description": "Get engagement metrics for a tweet",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tweet_id": {
+            "type": "string",
+            "description": "Tweet ID"
+          }
+        },
+        "required": ["tweet_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "tweet_id": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "impression_count": {
+                "type": "integer"
+              },
+              "like_count": {
+                "type": "integer"
+              },
+              "reply_count": {
+                "type": "integer"
+              },
+              "retweet_count": {
+                "type": "integer"
+              },
+              "quote_count": {
+                "type": "integer"
+              },
+              "bookmark_count": {
+                "type": "integer"
+              }
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "get_rate_limit_status",
+      "description": "Check current rate limit status for posting",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "tweets_remaining_15min": {
+                "type": "integer"
+              },
+              "tweets_limit_15min": {
+                "type": "integer",
+                "default": 100
+              },
+              "reset_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "daily_tweets_remaining": {
+                "type": "integer"
+              },
+              "daily_tweets_limit": {
+                "type": "integer"
+              }
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "validate_tweet",
+      "description": "Validate tweet text without posting. Checks character count, URL parsing, and mentions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Tweet text to validate"
+          }
+        },
+        "required": ["text"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "character_count": {
+            "type": "integer",
+            "description": "Weighted character count (URLs = 23 chars)"
+          },
+          "characters_remaining": {
+            "type": "integer"
+          },
+          "urls_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mentions_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hashtags_detected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "validation_errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["valid", "character_count"]
+      }
+    }
+  ],
+  "errorCodes": {
+    "TW_AUTH_FAILED": "Authentication failed - check OAuth credentials",
+    "TW_RATE_LIMITED": "Rate limit exceeded - see reset_at for retry time",
+    "TW_DUPLICATE": "Duplicate tweet - Twitter rejected as duplicate content",
+    "TW_TWEET_NOT_FOUND": "Tweet not found",
+    "TW_USER_SUSPENDED": "Account is suspended",
+    "TW_MEDIA_ERROR": "Failed to upload or process media",
+    "TW_CHARACTER_LIMIT": "Tweet exceeds 280 character limit",
+    "TW_CONTENT_POLICY": "Content violates Twitter rules",
+    "TW_REPLY_RESTRICTED": "Cannot reply to this tweet due to reply restrictions",
+    "APPROVAL_REQUIRED": "Action requires approval",
+    "APPROVAL_INVALID": "Invalid or expired approval token"
+  },
+  "configuration": {
+    "oauth": {
+      "api_key": "env:TWITTER_API_KEY",
+      "api_secret": "credential:twitter_api_secret",
+      "access_token": "env:TWITTER_ACCESS_TOKEN",
+      "access_token_secret": "credential:twitter_access_token_secret",
+      "bearer_token": "credential:twitter_bearer_token"
+    },
+    "api": {
+      "base_url_v2": "https://api.x.com/2",
+      "base_url_v1": "https://upload.twitter.com/1.1",
+      "timeout_ms": 30000
+    },
+    "rate_limits": {
+      "tweets_per_15min": 100,
+      "tweets_per_day": 50,
+      "deletes_per_15min": 50,
+      "media_uploads_per_15min": 30
+    },
+    "character_limits": {
+      "tweet": 280,
+      "url_weight": 23,
+      "dm": 10000
+    }
+  }
+}

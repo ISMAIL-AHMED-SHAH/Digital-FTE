@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "file-watcher"
-version = "0.1.0"
-description = "Local File Watcher Service for Bona-Papa AI Employee - monitors drop folder and creates action items in Obsidian vault"
+name = "ai-employee"
+version = "0.2.0"
+description = "AI Employee for Bona-Papa - Bronze Tier file watcher + Silver Tier external connectivity (Gmail, WhatsApp, LinkedIn)"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.13"
@@ -25,19 +25,35 @@ classifiers = [
 ]
 
 dependencies = [
+    # Bronze Tier (Local File Watcher)
     "watchdog>=4.0.0",
     "PyYAML>=6.0",
     "python-json-logger>=2.0.0",
+    # Silver Tier (External Connectivity)
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.100.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.5.0",
+    "keyring>=25.0.0",
+    "cryptography>=42.0.0",
+    "psutil>=5.9.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-timeout>=2.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.26.0",
 ]
 
 [project.scripts]
 file-watcher = "file_watcher.__main__:main"
+gmail-watcher = "watchers.gmail_watcher:main"
+whatsapp-webhook = "watchers.whatsapp_webhook:main"
+approval-watcher = "watchers.approval_watcher:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

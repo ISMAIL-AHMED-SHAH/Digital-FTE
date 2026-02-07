@@ -1,0 +1,496 @@
+openapi: 3.1.0
+info:
+  title: WhatsApp Business API Webhook Handler
+  description: |
+    FastAPI webhook endpoint for receiving WhatsApp Business API messages
+    in AI Employee Silver Tier.
+
+    This webhook handles incoming messages from Meta's WhatsApp Business API,
+    validates signatures, filters by keywords, and creates action files in
+    the Obsidian vault.
+
+    ## Security
+
+    All webhook requests MUST include a valid `X-Hub-Signature-256` header
+    containing an HMAC-SHA256 signature of the request body using the app secret.
+
+    ## Rate Limiting
+
+    The endpoint implements rate limiting at 100 requests per minute per IP
+    to prevent abuse and DoS attacks.
+
+    ## Response Time
+
+    The endpoint MUST respond with HTTP 200 within 500ms to prevent
+    Meta from marking the webhook as unhealthy and retrying.
+  version: 1.0.0
+  contact:
+    name: AI Employee
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://your-domain.com
+    description: Production server (requires HTTPS)
+
+paths:
+  /webhooks/whatsapp:
+    get:
+      operationId: verifyWebhook
+      summary: Webhook Verification
+      description: |
+        Meta sends a GET request to verify the webhook endpoint during setup.
+        The endpoint must return the `hub.challenge` value to complete verification.
+
+        This is called once during webhook configuration in Meta Developer Console.
+      tags:
+        - Webhook
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+          description: Should be "subscribe" for webhook verification
+          schema:
+            type: string
+            enum:
+              - subscribe
+        - name: hub.challenge
+          in: query
+          required: true
+          description: Random string that must be returned to complete verification
+          schema:
+            type: string
+        - name: hub.verify_token
+          in: query
+          required: true
+          description: |
+            Verify token set in Meta Developer Console.
+            Must match WHATSAPP_VERIFY_TOKEN environment variable.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Verification successful
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: The hub.challenge value
+              example: "challenge_value_12345"
+        "403":
+          description: Verification failed - token mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: receiveWebhook
+      summary: Receive WhatsApp Message Webhook
+      description: |
+        Receives incoming WhatsApp messages from Meta's Business API.
+
+        **Flow:**
+        1. Validate rate limit (100 req/min per IP)
+        2. Validate X-Hub-Signature-256 header
+        3. Parse webhook payload
+        4. Return HTTP 200 immediately (within 500ms)
+        5. Process messages asynchronously in background
+
+        **Message Processing:**
+        - Extract text messages
+        - Filter by configured keywords
+        - Check idempotency (skip duplicates)
+        - Create action file in vault
+
+        **Security:**
+        - Requests with invalid signatures are rejected with 401
+        - Rate-limited requests are rejected with 429
+      tags:
+        - Webhook
+      security:
+        - webhookSignature: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          description: |
+            HMAC-SHA256 signature of the request body.
+            Format: `sha256=<hex_signature>`
+          schema:
+            type: string
+            pattern: "^sha256=[a-f0-9]{64}$"
+          example: "sha256=abc123def456..."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookPayload"
+            examples:
+              textMessage:
+                summary: Text message from user
+                value:
+                  object: whatsapp_business_account
+                  entry:
+                    - id: "WHATSAPP_BUSINESS_ACCOUNT_ID"
+                      changes:
+                        - value:
+                            messaging_product: whatsapp
+                            metadata:
+                              display_phone_number: "+1234567890"
+                              phone_number_id: "PHONE_NUMBER_ID"
+                            contacts:
+                              - profile:
+                                  name: "John Doe"
+                                wa_id: "1234567890"
+                            messages:
+                              - from: "1234567890"
+                                id: "wamid.HBgLMTIzNDU2Nzg5MBUCAA=="
+                                timestamp: "1706187234"
+                                type: text
+                                text:
+                                  body: "I need help with an invoice"
+                          field: messages
+              statusUpdate:
+                summary: Message status update
+                value:
+                  object: whatsapp_business_account
+                  entry:
+                    - id: "WHATSAPP_BUSINESS_ACCOUNT_ID"
+                      changes:
+                        - value:
+                            messaging_product: whatsapp
+                            statuses:
+                              - id: "wamid.HBgLMTIzNDU2Nzg5MBUCAA=="
+                                status: delivered
+                                timestamp: "1706187235"
+                          field: messages
+      responses:
+        "200":
+          description: Webhook received successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookResponse"
+              examples:
+                received:
+                  summary: Messages queued for processing
+                  value:
+                    status: received
+                    messages_queued: 1
+                ignored:
+                  summary: Non-WhatsApp event ignored
+                  value:
+                    status: ignored
+        "401":
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Invalid signature
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                detail: Rate limit exceeded
+
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health Check
+      description: Check if the webhook handler is running and healthy
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: healthy
+                service: whatsapp-webhook
+                enabled: true
+                rate_limit: "100/min"
+
+  /stats:
+    get:
+      operationId: getStats
+      summary: Get Handler Statistics
+      description: Get statistics about the webhook handler
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Handler statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatsResponse"
+
+components:
+  securitySchemes:
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: |
+        HMAC-SHA256 signature of the request body using the app secret.
+        The signature is prefixed with `sha256=`.
+
+  schemas:
+    WebhookPayload:
+      type: object
+      description: Complete webhook payload from Meta
+      required:
+        - object
+        - entry
+      properties:
+        object:
+          type: string
+          description: Object type, should be "whatsapp_business_account"
+          enum:
+            - whatsapp_business_account
+        entry:
+          type: array
+          description: List of webhook entries
+          items:
+            $ref: "#/components/schemas/WebhookEntry"
+
+    WebhookEntry:
+      type: object
+      description: A single webhook entry containing changes
+      required:
+        - id
+        - changes
+      properties:
+        id:
+          type: string
+          description: WhatsApp Business Account ID
+        changes:
+          type: array
+          description: List of changes in this entry
+          items:
+            $ref: "#/components/schemas/WebhookChange"
+
+    WebhookChange:
+      type: object
+      description: A change event containing messages or statuses
+      required:
+        - value
+      properties:
+        value:
+          $ref: "#/components/schemas/WebhookValue"
+        field:
+          type: string
+          description: Field that changed
+          enum:
+            - messages
+
+    WebhookValue:
+      type: object
+      description: The value object containing messages, contacts, and metadata
+      properties:
+        messaging_product:
+          type: string
+          description: Should be "whatsapp"
+          enum:
+            - whatsapp
+        metadata:
+          $ref: "#/components/schemas/WebhookMetadata"
+        contacts:
+          type: array
+          description: Contact information for message senders
+          items:
+            $ref: "#/components/schemas/WebhookContact"
+        messages:
+          type: array
+          description: List of messages received
+          items:
+            $ref: "#/components/schemas/WhatsAppMessage"
+        statuses:
+          type: array
+          description: Message status updates
+          items:
+            $ref: "#/components/schemas/MessageStatus"
+
+    WebhookMetadata:
+      type: object
+      description: Metadata about the receiving phone number
+      properties:
+        display_phone_number:
+          type: string
+          description: Display phone number of the business
+        phone_number_id:
+          type: string
+          description: ID of the phone number
+
+    WebhookContact:
+      type: object
+      description: Contact information for a message sender
+      properties:
+        profile:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Contact's WhatsApp profile name
+        wa_id:
+          type: string
+          description: WhatsApp ID (phone number)
+
+    WhatsAppMessage:
+      type: object
+      description: A WhatsApp message
+      required:
+        - from
+        - id
+        - timestamp
+        - type
+      properties:
+        from:
+          type: string
+          description: Sender's phone number
+        id:
+          type: string
+          description: Unique message ID from WhatsApp
+        timestamp:
+          type: string
+          description: Unix timestamp of the message
+        type:
+          type: string
+          description: Type of message
+          enum:
+            - text
+            - image
+            - audio
+            - video
+            - document
+            - sticker
+            - location
+            - contacts
+            - interactive
+        text:
+          type: object
+          description: Text content (for type=text)
+          properties:
+            body:
+              type: string
+              description: Message text content
+
+    MessageStatus:
+      type: object
+      description: Message delivery status update
+      properties:
+        id:
+          type: string
+          description: Message ID
+        status:
+          type: string
+          description: Delivery status
+          enum:
+            - sent
+            - delivered
+            - read
+            - failed
+        timestamp:
+          type: string
+          description: Unix timestamp of the status update
+
+    WebhookResponse:
+      type: object
+      description: Response after receiving webhook
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: Processing status
+          enum:
+            - received
+            - ignored
+            - error
+        messages_queued:
+          type: integer
+          description: Number of messages queued for processing
+          minimum: 0
+        message:
+          type: string
+          description: Additional message (for errors)
+
+    HealthResponse:
+      type: object
+      description: Health check response
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          enum:
+            - healthy
+            - unhealthy
+        service:
+          type: string
+          example: whatsapp-webhook
+        enabled:
+          type: boolean
+          description: Whether the webhook handler is enabled
+        rate_limit:
+          type: string
+          description: Rate limit configuration
+          example: "100/min"
+
+    StatsResponse:
+      type: object
+      description: Handler statistics
+      properties:
+        service:
+          type: string
+          example: whatsapp-webhook
+        config:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            keywords:
+              type: array
+              items:
+                type: string
+            rate_limit:
+              type: integer
+        idempotency:
+          type: object
+          properties:
+            processed_messages:
+              type: integer
+        vault:
+          type: object
+          properties:
+            needs_action_files:
+              type: integer
+
+    ErrorResponse:
+      type: object
+      description: Error response
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message
+
+tags:
+  - name: Webhook
+    description: WhatsApp Business API webhook endpoints
+  - name: Health
+    description: Health and monitoring endpoints

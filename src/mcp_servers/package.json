@@ -1,0 +1,48 @@
+{
+  "name": "@ai-employee/mcp-servers",
+  "version": "0.3.0",
+  "description": "MCP servers for AI Employee Gold Tier - Odoo, Facebook, Instagram, Twitter integrations",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "odoo",
+    "facebook",
+    "instagram",
+    "twitter"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:odoo": "npm run build -w odoo",
+    "build:facebook": "npm run build -w facebook",
+    "build:instagram": "npm run build -w instagram",
+    "build:twitter": "npm run build -w twitter",
+    "test": "npm run test --workspaces",
+    "test:odoo": "npm run test -w odoo",
+    "test:facebook": "npm run test -w facebook",
+    "test:instagram": "npm run test -w instagram",
+    "test:twitter": "npm run test -w twitter",
+    "lint": "eslint --ext .ts,.js .",
+    "lint:fix": "eslint --ext .ts,.js . --fix",
+    "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+    "clean": "rimraf **/dist **/node_modules/.cache"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.0",
+    "rimraf": "^6.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "zod": "^3.24.0"
+  }
+}

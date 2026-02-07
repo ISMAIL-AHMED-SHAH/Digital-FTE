@@ -1,0 +1,8 @@
+tasks:
+  daily_briefing:
+    description: Generate daily briefing document
+    enabled: true
+    function: run
+    module: src.tasks.daily_briefing
+    parameters: {}
+    schedule: 0 8 * * *

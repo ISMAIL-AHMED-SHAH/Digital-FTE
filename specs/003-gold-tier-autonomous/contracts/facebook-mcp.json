@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Facebook MCP Server Contract",
+  "description": "MCP tool definitions for Facebook Pages posting via Meta Business Suite API (Graph API v22+)",
+  "version": "1.0.0",
+  "server": {
+    "name": "facebook-mcp",
+    "description": "Facebook Pages posting and management",
+    "transport": "stdio",
+    "command": "node",
+    "args": ["src/mcp_servers/facebook/index.js"]
+  },
+  "tools": [
+    {
+      "name": "create_post",
+      "description": "Create a post on a Facebook Page. Requires approval before publishing. Supports text, links, and images.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page_id": {
+            "type": "string",
+            "description": "Facebook Page ID to post to"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 63206,
+            "description": "Post text content (max 63,206 characters)"
+          },
+          "link": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to share with the post"
+          },
+          "image_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of image to attach (must be publicly accessible)"
+          },
+          "scheduled_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp for scheduled publishing (must be 10 min to 6 months in future)"
+          },
+          "targeting": {
+            "type": "object",
+            "description": "Optional audience targeting",
+            "properties": {
+              "geo_locations": {
+                "type": "object",
+                "properties": {
+                  "countries": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "age_min": {
+                "type": "integer",
+                "minimum": 13
+              },
+              "age_max": {
+                "type": "integer",
+                "maximum": 65
+              }
+            }
+          }
+        },
+        "required": ["page_id", "message"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "post_id": {
+            "type": "string",
+            "description": "Facebook post ID"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the published post"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending_approval", "published", "scheduled", "failed"],
+            "description": "Post status"
+          },
+          "scheduled_publish_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Scheduled time if applicable"
+          },
+          "approval_file": {
+            "type": "string",
+            "description": "Path to approval request file in vault (if pending)"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if failed"
+          }
+        },
+        "required": ["success", "status"]
+      }
+    },
+    {
+      "name": "get_page_info",
+      "description": "Get information about a Facebook Page including access token status",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page_id": {
+            "type": "string",
+            "description": "Facebook Page ID"
+          }
+        },
+        "required": ["page_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "category": {
+                "type": "string"
+              },
+              "followers_count": {
+                "type": "integer"
+              },
+              "fan_count": {
+                "type": "integer"
+              }
+            }
+          },
+          "token_status": {
+            "type": "object",
+            "properties": {
+              "valid": {
+                "type": "boolean"
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "get_post_insights",
+      "description": "Get engagement metrics for a published post",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "post_id": {
+            "type": "string",
+            "description": "Facebook post ID"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["post_impressions", "post_engaged_users", "post_reactions_by_type_total", "post_clicks"]
+            },
+            "default": ["post_impressions", "post_engaged_users"],
+            "description": "Metrics to retrieve"
+          }
+        },
+        "required": ["post_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "post_id": {
+            "type": "string"
+          },
+          "insights": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "delete_post",
+      "description": "Delete a Facebook post. Requires approval.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "post_id": {
+            "type": "string",
+            "description": "Facebook post ID to delete"
+          },
+          "approval_token": {
+            "type": "string",
+            "description": "Approval token from vault"
+          }
+        },
+        "required": ["post_id", "approval_token"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    },
+    {
+      "name": "refresh_token",
+      "description": "Refresh the Page Access Token before expiry. Called proactively when <1 hour remaining.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page_id": {
+            "type": "string",
+            "description": "Facebook Page ID"
+          }
+        },
+        "required": ["page_id"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "New token expiry time"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": ["success"]
+      }
+    }
+  ],
+  "errorCodes": {
+    "FB_AUTH_FAILED": "Authentication failed - token expired or invalid",
+    "FB_TOKEN_EXPIRED": "Page Access Token has expired - refresh required",
+    "FB_PERMISSION_DENIED": "Missing required permission (pages_manage_posts)",
+    "FB_RATE_LIMITED": "Rate limit exceeded - retry after cooldown",
+    "FB_PAGE_NOT_FOUND": "Page not found or not accessible",
+    "FB_POST_NOT_FOUND": "Post not found",
+    "FB_CONTENT_POLICY": "Content violates Facebook community standards",
+    "FB_MEDIA_ERROR": "Failed to process media attachment",
+    "APPROVAL_REQUIRED": "Action requires approval",
+    "APPROVAL_INVALID": "Invalid or expired approval token"
+  },
+  "configuration": {
+    "oauth": {
+      "app_id": "env:META_APP_ID",
+      "app_secret": "credential:meta_app_secret",
+      "page_access_token": "credential:fb_page_token_{page_id}"
+    },
+    "api": {
+      "base_url": "https://graph.facebook.com/v22.0",
+      "timeout_ms": 30000
+    },
+    "rate_limits": {
+      "posts_per_day": 5,
+      "requests_per_hour": 200
+    },
+    "token_refresh": {
+      "threshold_minutes": 60,
+      "proactive": true
+    }
+  }
+}

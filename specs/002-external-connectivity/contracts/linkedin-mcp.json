@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LinkedIn MCP Server Contract",
+  "description": "Model Context Protocol tool definitions for LinkedIn operations in AI Employee Silver Tier",
+  "version": "1.0.0",
+  "server": {
+    "name": "linkedin-mcp-server",
+    "version": "1.0.0",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["tsx", "src/mcp_servers/linkedin/src/index.ts"]
+  },
+  "tools": [
+    {
+      "name": "create_post",
+      "description": "Create a LinkedIn post. Requires prior approval through the approval workflow. Rate limited to 10 posts per day. Duplicate posts are automatically detected and blocked. Content is limited to 3000 characters.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000,
+            "description": "Post content (max 3000 characters)"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["PUBLIC", "CONNECTIONS"],
+            "default": "PUBLIC",
+            "description": "Post visibility: PUBLIC (anyone can see) or CONNECTIONS (1st degree connections only)"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "URLs of media to attach (optional, future feature)"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, simulate post without actually posting (for testing)"
+          }
+        },
+        "required": ["content"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the post was created successfully"
+          },
+          "post_id": {
+            "type": "string",
+            "description": "LinkedIn post ID (only on success)"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL to the published post (only on success)"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message (only on failure)"
+          },
+          "rate_limit": {
+            "type": "object",
+            "properties": {
+              "remaining": {
+                "type": "integer",
+                "description": "Number of posts remaining today"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Daily post limit"
+              }
+            },
+            "description": "Rate limit status"
+          }
+        },
+        "required": ["success"]
+      }
+    }
+  ],
+  "securityRequirements": {
+    "authentication": {
+      "type": "oauth2",
+      "provider": "linkedin",
+      "scopes": [
+        "openid",
+        "profile",
+        "w_member_social"
+      ],
+      "credentialStorage": ["os-keyring", "encrypted-file"]
+    },
+    "approvalRequired": true,
+    "approvalWorkflow": {
+      "description": "All LinkedIn posts must be approved via the Human-in-the-Loop approval workflow",
+      "approvalFolder": "/Pending_Approval",
+      "approvedFolder": "/Approved",
+      "rejectedFolder": "/Rejected",
+      "integrityValidation": "sha256"
+    }
+  },
+  "rateLimits": {
+    "create_post": {
+      "limit": 10,
+      "window": "24h",
+      "scope": "per-account"
+    }
+  },
+  "idempotency": {
+    "enabled": true,
+    "keyComponents": ["content", "visibility", "timestamp_minute"],
+    "windowHours": 168
+  },
+  "errorCodes": {
+    "RATE_LIMIT_EXCEEDED": {
+      "description": "Daily post limit reached (10/day)",
+      "retryable": false,
+      "httpEquivalent": 429
+    },
+    "DUPLICATE_POST": {
+      "description": "Post already published within idempotency window",
+      "retryable": false,
+      "httpEquivalent": 409
+    },
+    "CREDENTIALS_NOT_FOUND": {
+      "description": "LinkedIn OAuth credentials not configured",
+      "retryable": false,
+      "httpEquivalent": 401
+    },
+    "TOKEN_EXPIRED": {
+      "description": "OAuth token expired and refresh failed",
+      "retryable": true,
+      "httpEquivalent": 401
+    },
+    "CONTENT_TOO_LONG": {
+      "description": "Post content exceeds 3000 character limit",
+      "retryable": false,
+      "httpEquivalent": 400
+    },
+    "LINKEDIN_API_ERROR": {
+      "description": "LinkedIn API returned an error",
+      "retryable": true,
+      "httpEquivalent": 502
+    }
+  },
+  "usageExamples": [
+    {
+      "name": "Simple public post",
+      "input": {
+        "content": "Excited to share our latest product update! #innovation #tech",
+        "visibility": "PUBLIC"
+      },
+      "expectedOutput": {
+        "success": true,
+        "post_id": "urn:li:share:1234567890",
+        "url": "https://www.linkedin.com/feed/update/urn:li:share:1234567890",
+        "rate_limit": {
+          "remaining": 9,
+          "limit": 10
+        }
+      }
+    },
+    {
+      "name": "Connections-only post",
+      "input": {
+        "content": "Quick update for my network - we're hiring! Reach out if interested.",
+        "visibility": "CONNECTIONS"
+      },
+      "expectedOutput": {
+        "success": true,
+        "post_id": "urn:li:share:0987654321",
+        "url": "https://www.linkedin.com/feed/update/urn:li:share:0987654321"
+      }
+    },
+    {
+      "name": "Dry run test",
+      "input": {
+        "content": "Test post content",
+        "visibility": "PUBLIC",
+        "dry_run": true
+      },
+      "expectedOutput": {
+        "success": true,
+        "post_id": "dry-run-post-id",
+        "url": "https://www.linkedin.com/feed/update/dry-run-post-id"
+      }
+    }
+  ],
+  "setupInstructions": {
+    "steps": [
+      "1. Go to https://www.linkedin.com/developers/apps and create a new app",
+      "2. Add your app to a LinkedIn Page you manage",
+      "3. Request access to the 'Share on LinkedIn' and 'Sign In with LinkedIn using OpenID Connect' products",
+      "4. Under Auth tab, add redirect URI: http://localhost:8080/callback",
+      "5. Note your Client ID and Client Secret",
+      "6. Run the OAuth setup script to obtain and store tokens",
+      "7. Verify credentials with: npx tsx src/mcp_servers/linkedin/src/index.ts"
+    ],
+    "requiredScopes": [
+      "openid - Required for user identification",
+      "profile - Required to get user URN for posting",
+      "w_member_social - Required to create posts"
+    ]
+  }
+}

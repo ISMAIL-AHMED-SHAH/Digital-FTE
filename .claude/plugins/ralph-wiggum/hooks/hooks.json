@@ -1,0 +1,100 @@
+{
+  "$schema": "https://claude.ai/schemas/hooks-v1.json",
+  "version": "1.0.0",
+  "plugin": "ralph-wiggum",
+  "hooks": [
+    {
+      "id": "ralph-wiggum-stop",
+      "type": "stop",
+      "name": "Hybrid Completion Detection",
+      "description": "Monitors Claude's responses for completion signals, approval requests, error states, and task completion to intelligently stop the autonomous loop.",
+      "script": "../../../hooks/ralph-wiggum-stop.sh",
+      "enabled": true,
+      "priority": 100,
+      "timeout_ms": 5000,
+      "retry_on_failure": false,
+      "environment": {
+        "RALPH_WIGGUM_MAX_ITERATIONS": "${config.max_iterations}",
+        "APPROVAL_DIR": "${project.root}/data/approvals",
+        "TASK_FILE": "${project.root}/specs/${feature}/tasks.md"
+      },
+      "input": {
+        "CLAUDE_RESPONSE": "${response.text}"
+      },
+      "output": {
+        "format": "json",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "stop": {
+              "type": "boolean",
+              "description": "Whether to stop the autonomous loop"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "iteration_limit",
+                "error_state",
+                "approval_required",
+                "semantic_completion",
+                "task_completion"
+              ],
+              "description": "Reason for stopping"
+            }
+          },
+          "required": ["stop"]
+        }
+      },
+      "conditions": {
+        "autonomous_mode": true,
+        "feature_enabled": "ralph_wiggum"
+      },
+      "logging": {
+        "enabled": true,
+        "level": "info",
+        "file": "${project.root}/logs/ralph-wiggum-stop.log"
+      }
+    },
+    {
+      "id": "ralph-wiggum-pre-action",
+      "type": "pre_action",
+      "name": "Pre-Action Validation",
+      "description": "Validates actions before execution, checks service availability, and applies rate limiting.",
+      "script": null,
+      "enabled": false,
+      "priority": 50,
+      "timeout_ms": 2000,
+      "notes": "Placeholder for future implementation - will validate actions against rate limits and service health"
+    },
+    {
+      "id": "ralph-wiggum-post-action",
+      "type": "post_action",
+      "name": "Post-Action Logging",
+      "description": "Logs completed actions for audit trail and updates metrics.",
+      "script": null,
+      "enabled": false,
+      "priority": 50,
+      "timeout_ms": 2000,
+      "notes": "Placeholder for future implementation - will log actions to audit system"
+    }
+  ],
+  "triggers": {
+    "post_response": {
+      "description": "Triggered after Claude generates a response",
+      "hooks": ["ralph-wiggum-stop"]
+    },
+    "post_action": {
+      "description": "Triggered after Claude executes an action",
+      "hooks": ["ralph-wiggum-stop", "ralph-wiggum-post-action"]
+    },
+    "pre_action": {
+      "description": "Triggered before Claude executes an action",
+      "hooks": ["ralph-wiggum-pre-action"]
+    }
+  },
+  "defaults": {
+    "timeout_ms": 5000,
+    "retry_on_failure": false,
+    "enabled": true
+  }
+}

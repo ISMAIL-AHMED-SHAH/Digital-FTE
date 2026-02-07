@@ -1,0 +1,205 @@
+# Gold Tier Configuration
+# AI Employee - Autonomous Employee Configuration
+# Version: 0.3.0
+
+# =============================================================================
+# CEO Briefing Schedule
+# =============================================================================
+ceo_briefing:
+  enabled: true
+  schedule:
+    # Day of week (0=Monday, 6=Sunday)
+    day_of_week: 6  # Sunday
+    # Time in 24-hour format (local timezone)
+    time: "23:00"
+    # Timezone for schedule (IANA format)
+    timezone: "America/New_York"
+  output:
+    # Path relative to vault root
+    directory: "Briefings"
+    # Filename pattern (supports {date}, {period_start}, {period_end})
+    filename_pattern: "ceo_briefing_{date}.md"
+  content:
+    # Sections to include in briefing
+    include:
+      - executive_summary
+      - revenue_summary
+      - completed_tasks
+      - bottlenecks
+      - cost_optimization
+      - upcoming_deadlines
+    # Revenue target for percentage calculations
+    monthly_target: 10000
+    # Number of top customers to show
+    top_customers_limit: 5
+  # Odoo integration for financial data
+  odoo_integration: true
+  # Fallback behavior when Odoo is unavailable
+  odoo_unavailable_behavior: "partial_briefing"  # or "skip", "retry"
+
+# =============================================================================
+# Social Media Rate Limits
+# =============================================================================
+rate_limits:
+  facebook:
+    posts_per_day: 5
+    requests_per_hour: 200
+  instagram:
+    posts_per_day: 3
+    api_calls_per_hour: 200
+  twitter:
+    tweets_per_15min: 100
+    tweets_per_day: 50
+    deletes_per_15min: 50
+  linkedin:
+    posts_per_day: 100
+
+# =============================================================================
+# Ralph Wiggum Autonomous Loop
+# =============================================================================
+ralph_wiggum:
+  enabled: true
+  # Maximum iterations before forcing exit
+  max_iterations: 10
+  # Maximum duration in minutes before forcing exit
+  timeout_minutes: 30
+  # Completion detection strategy: file_based, promise_based, hybrid
+  completion_strategy: "hybrid"
+  # Log each iteration for debugging
+  log_iterations: true
+  # Generate summary when loop completes
+  generate_summary: true
+  # Stagnation detection (no progress after N iterations)
+  stagnation_threshold: 3
+  # File patterns to watch for completion (file_based strategy)
+  completion_file_patterns:
+    - "Done/*.md"
+    - "Completed/*.md"
+  # Promise pattern to detect (promise_based strategy)
+  promise_pattern: "<promise>TASK_COMPLETE</promise>"
+
+# =============================================================================
+# Odoo Connection
+# =============================================================================
+odoo:
+  # Connection settings
+  connection:
+    host: "${ODOO_HOST:-localhost}"
+    port: "${ODOO_PORT:-8069}"
+    database: "${ODOO_DATABASE:-ai_employee}"
+    username: "${ODOO_USERNAME:-admin}"
+    # API key reference in OS credential manager
+    api_key_ref: "odoo_api_key"
+  # Timeout and retry settings (per spec clarification)
+  timeouts:
+    connection_seconds: 30
+    request_seconds: 60
+  retry:
+    max_attempts: 3
+    initial_delay_seconds: 1
+    max_delay_seconds: 10
+    backoff_multiplier: 2
+  # Queue settings for graceful degradation
+  queue:
+    enabled: true
+    max_size: 100
+    persistence_file: "data/odoo_queue.json"
+
+# =============================================================================
+# OAuth Token Refresh (per spec clarification FR-012a)
+# =============================================================================
+oauth:
+  # Proactive refresh threshold
+  refresh_threshold_minutes: 60
+  # Check token expiry before each API call
+  proactive_check: true
+  # Retry settings for token refresh
+  refresh_retry:
+    max_attempts: 3
+    delay_seconds: 5
+
+# =============================================================================
+# Error Recovery
+# =============================================================================
+error_recovery:
+  # Exponential backoff settings (FR-026)
+  retry:
+    initial_delay_seconds: 1
+    max_delay_seconds: 60
+    max_attempts: 5
+    backoff_multiplier: 2
+  # Graceful degradation
+  graceful_degradation:
+    enabled: true
+    queue_unavailable_actions: true
+    auto_recover: true
+    recovery_check_interval_seconds: 60
+  # Quarantine settings
+  quarantine:
+    enabled: true
+    directory: "Quarantine"
+    alert_on_quarantine: true
+
+# =============================================================================
+# Audit Logging (FR-031-036)
+# =============================================================================
+audit:
+  enabled: true
+  # Log file settings
+  log_directory: "Logs"
+  log_filename_pattern: "{date}.json"
+  # Retention settings
+  retention_days: 90
+  compression_after_days: 30
+  # Size alerting
+  max_size_mb: 1024
+  alert_threshold_percent: 80
+  # Compression settings
+  compression:
+    enabled: true
+    algorithm: "gzip"
+    level: 6
+
+# =============================================================================
+# Watchdog Process (FR-027)
+# =============================================================================
+watchdog:
+  enabled: true
+  # Check interval in seconds
+  check_interval_seconds: 30
+  # Processes to monitor
+  monitored_processes:
+    - name: "orchestrator"
+      restart_on_crash: true
+      max_restarts: 5
+      restart_cooldown_seconds: 60
+    - name: "file_watcher"
+      restart_on_crash: true
+      max_restarts: 5
+      restart_cooldown_seconds: 30
+  # Alert settings
+  alerts:
+    enabled: true
+    alert_directory: "Alerts"
+    alert_on_restart: true
+    alert_on_max_restarts: true
+
+# =============================================================================
+# Scheduled Tasks
+# =============================================================================
+scheduled_tasks:
+  # CEO Briefing (Sunday 11 PM)
+  ceo_briefing:
+    enabled: true
+    cron: "0 23 * * 0"
+    command: "python src/tasks/ceo_briefing.py"
+  # Log maintenance (Daily 3 AM)
+  log_maintenance:
+    enabled: true
+    cron: "0 3 * * *"
+    command: "python src/tasks/log_maintenance.py"
+  # Health check (Every 5 minutes)
+  health_check:
+    enabled: true
+    cron: "*/5 * * * *"
+    command: "python src/tasks/health_check.py"
