@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-02-17T11:22:37.596924+00:00",
+    "action_type": "odoo_invoice_draft_created",
+    "actor": "ai-employee/odoo-mcp",
+    "dry_run": true,
+    "approval_status": "pending",
+    "result": "draft_created",
+    "target": "Acme Corporation",
+    "odoo_draft_id": "DRAFT-DRY-001",
+    "amount_total": 4000.0,
+    "currency": "USD"
+  }
+]
