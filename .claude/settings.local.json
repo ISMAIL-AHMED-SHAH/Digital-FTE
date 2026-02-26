@@ -53,7 +53,8 @@
       "Bash(git push:*)",
       "Bash(git config:*)",
       "Bash(python -c:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(cd /c/Code/Hackathon-0/src/mcp_servers/whatsapp && npm run build 2>&1)"
     ]
   },
   "mcpServers": {
@@ -149,6 +150,28 @@
       "rateLimits": {
         "tweets_per_day": 100,
         "requests_per_15min": 300
+      }
+    },
+    "whatsapp": {
+      "command": "node",
+      "args": [
+        "src/mcp_servers/whatsapp/dist/index.js"
+      ],
+      "env": {
+        "ACCESS_TOKEN": "${ACCESS_TOKEN}",
+        "WHATSAPP_PHONE_NUMBER_ID": "${WHATSAPP_PHONE_NUMBER_ID}",
+        "WHATSAPP_BUSINESS_ACCOUNT_ID": "${WHATSAPP_BUSINESS_ACCOUNT_ID}"
+      },
+      "description": "WhatsApp Business Cloud API MCP server for sending messages",
+      "autoStart": false,
+      "healthCheck": {
+        "enabled": true,
+        "interval_ms": 60000,
+        "timeout_ms": 5000
+      },
+      "rateLimits": {
+        "messages_per_second": 80,
+        "messages_per_day": 1000
       }
     }
   },
